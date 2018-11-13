@@ -26,6 +26,7 @@ module Fluent
     @@streamNumber = -1
 
     config_param :delivery_stream_name, :string
+    config_param :protection_mode_stream_name, :string, :default => nil
     config_param :delivery_stream_pool_size, :integer, :default => nil
     config_param :number_of_retries, :integer, :default => 5
     config_param :append_new_line,      :bool, default: true
@@ -55,18 +56,28 @@ module Fluent
       end
     end
 
-    def get_stream_name()
+    def get_stream_name(delivery_stream_name)
       unless delivery_stream_pool_size.nil?
         @@streamNumber = (@@streamNumber+1)%delivery_stream_pool_size
-        delivery_stream_name_in_use = @delivery_stream_name + "-" + @@streamNumber.to_s
+        delivery_stream_name_in_use = delivery_stream_name + "-" + @@streamNumber.to_s
       else
-        delivery_stream_name_in_use = @delivery_stream_name
+        delivery_stream_name_in_use = delivery_stream_name
       end
       return delivery_stream_name_in_use
     end
 
+    def get_ssm_parameter(parameter)
+      return false
+    end
+
     def put_records(records, retry_count)
-      delivery_stream_name = get_stream_name()
+      protection_mode = get_ssm_parameter("InfinityESProtectionMode")
+      unless protection_mode == true
+        delivery_stream_name = get_stream_name(@delivery_stream_name)
+      else
+        delivery_stream_name = get_stream_name(@protection_mode_stream_name)
+      end
+
       begin
         client.put_record_batch(
           delivery_stream_name: delivery_stream_name,
