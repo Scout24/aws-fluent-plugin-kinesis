@@ -24,6 +24,7 @@ module Fluent
     include KinesisHelper::API::BatchRequest
 
     @@streamNumber = -1
+    @@protection_mode = false
 
     config_param :delivery_stream_name, :string
     config_param :protection_mode_stream_name, :string, :default => nil
@@ -48,6 +49,7 @@ module Fluent
     end
 
     def write(chunk)
+      @@protection_mode = get_ssm_parameter("InfinityESProtectionMode")
       write_records_batch(chunk) do |batch|
         records = batch.map{|(data)|
           { data: data }
@@ -71,8 +73,7 @@ module Fluent
     end
 
     def put_records(records, retry_count)
-      protection_mode = get_ssm_parameter("InfinityESProtectionMode")
-      unless protection_mode == true
+      unless @@protection_mode
         delivery_stream_name = get_stream_name(@delivery_stream_name)
       else
         delivery_stream_name = get_stream_name(@protection_mode_stream_name)
