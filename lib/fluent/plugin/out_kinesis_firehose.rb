@@ -13,6 +13,7 @@
 # language governing permissions and limitations under the License.
 
 require 'fluent/plugin/kinesis'
+require 'aws-sdk'
 
 module Fluent
   class KinesisFirehoseOutput < KinesisOutput
@@ -25,6 +26,7 @@ module Fluent
 
     @@streamNumber = -1
     @@protection_mode = false
+    @@ssm = nil
 
     config_param :delivery_stream_name, :string
     config_param :protection_mode_stream_name, :string, :default => nil
@@ -40,6 +42,9 @@ module Fluent
           org_data_formatter.call(tag, time, record) + "\n"
         }
       end
+      if @protection_mode_stream_name
+        @@ssm = Aws::SSM::Client.new({region: 'eu-west-1'})
+      end
     end
 
     def format(tag, time, record)
@@ -49,13 +54,32 @@ module Fluent
     end
 
     def write(chunk)
-      @@protection_mode = get_ssm_parameter("InfinityESProtectionMode")
+      check_protection_mode()
       write_records_batch(chunk) do |batch|
         records = batch.map{|(data)|
           { data: data }
         }
         put_records(records, 0)
       end
+    end
+    
+    def check_protection_mode()
+      if protection_mode_stream_name
+        begin
+          @@protection_mode = get_ssm_parameter("InfinityESProtectionMode")
+        rescue Aws::Errors::ServiceError => err
+          log.error "AWS ServiceError - SSM may not be available, sending to protection bucket in case", {
+            "error" => err
+          }
+          @@protection_mode = true
+        end
+      end
+    end
+
+    def get_ssm_parameter(parameter)
+      return @@ssm.get_parameter({
+        name: parameter
+      })
     end
 
     def get_stream_name(delivery_stream_name)
@@ -66,10 +90,6 @@ module Fluent
         delivery_stream_name_in_use = delivery_stream_name
       end
       return delivery_stream_name_in_use
-    end
-
-    def get_ssm_parameter(parameter)
-      return false
     end
 
     def put_records(records, retry_count)
