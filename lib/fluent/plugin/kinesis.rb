@@ -61,6 +61,11 @@ module Fluent
     config_param :data_key,              :string,  default: nil
     config_param :log_truncate_max_size, :integer, default: 1024
     config_param :compression,           :string,  default: nil
+
+    # Based on https://github.com/awslabs/aws-fluent-plugin-kinesis/issues/142
+    # Changing the default value, because we don't want to touch what's working today.
+    config_param :chomp_record,          :bool,    default: true
+
     config_section :format do
       config_set_default :@type, 'json'
     end
@@ -101,12 +106,23 @@ module Fluent
       end
       compressor = compressor_create
       if @data_key.nil?
-        ->(tag, time, record) {
-          unless fluentd_v0_12?
-            record = inject_values_to_record(tag, time, record)
-          end
-          compressor.call(formatter.format(tag, time, record).chomp.b)
-        }
+
+        if @chomp_record
+          ->(tag, time, record) {
+            unless fluentd_v0_12?
+              record = inject_values_to_record(tag, time, record)
+            end
+            compressor.call(formatter.format(tag, time, record).chomp.b)
+          }
+        else
+          ->(tag, time, record) {
+            unless fluentd_v0_12?
+              record = inject_values_to_record(tag, time, record)
+            end
+            compressor.call(formatter.format(tag, time, record).b)
+          }
+        end
+
       else
         ->(tag, time, record) {
           raise InvalidRecordError, record unless record.is_a? Hash
