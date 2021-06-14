@@ -39,11 +39,20 @@ module Fluent
       end
     end
 
+    def size_of_records(records)
+      size = 0
+      records.each do |record|
+        record_size = record.compact.map(&:size).inject(:+) || 0
+        size += record_size
+      end
+    end
+
     def write(chunk)
       write_records_batch(chunk) do |batch|
         records = batch.map{|(data, partition_key)|
           { data: data, partition_key: partition_key }
         }
+        log.info "Writing records (size #{size_of_records(records)/1024}) KB to stream #{@stream_name}"
         client.put_records(
           stream_name: @stream_name,
           records: records,
