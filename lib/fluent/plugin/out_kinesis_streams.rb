@@ -45,6 +45,7 @@ module Fluent
         record_size = record.compact.map(&:size).inject(:+) || 0
         size += record_size
       end
+      return size
     end
 
     def write(chunk)
