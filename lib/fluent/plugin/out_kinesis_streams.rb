@@ -53,7 +53,7 @@ module Fluent
         records = batch.map{|(data, partition_key)|
           { data: data, partition_key: partition_key }
         }
-        log.info "Writing #{size_of_records(records)}B records to stream #{@stream_name} using partition_key #{partition_key}"
+        log.info "Writing #{size_of_records(records)}B records to stream #{@stream_name}"
         client.put_records(
           stream_name: @stream_name,
           records: records,
